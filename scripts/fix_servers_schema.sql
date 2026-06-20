@@ -60,3 +60,10 @@ WHERE server_type::text IN ('hosting', 'cdn', 'email', 'domain_registrar');
 
 UPDATE servers SET server_type = 'backend'
 WHERE server_type::text = 'database';
+
+CREATE TABLE IF NOT EXISTS user_server_access (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    server_id UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, server_id)
+);

@@ -77,6 +77,25 @@ class User(Base):
     )
 
     audit_logs: Mapped[list["AuditLog"]] = relationship(back_populates="user")
+    server_access: Mapped[list["UserServerAccess"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class UserServerAccess(Base):
+    __tablename__ = "user_server_access"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    server_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("servers.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="server_access")
+    server: Mapped["Server"] = relationship(back_populates="user_access")
 
 
 class Category(Base):
@@ -132,6 +151,7 @@ class Server(Base):
         back_populates="backend_server",
         foreign_keys="Project.backend_server_id",
     )
+    user_access: Mapped[list["UserServerAccess"]] = relationship(back_populates="server")
 
 
 class Domain(Base):

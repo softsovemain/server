@@ -8,6 +8,12 @@ from app.core.deps import get_current_user, require_roles
 from app.models import Project, User, UserRole
 from app.schemas import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services.audit import log_audit
+from app.services.permissions import (
+    filter_projects_query,
+    get_accessible_server_ids,
+    get_project_or_403,
+    validate_project_server_links,
+)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -36,8 +42,10 @@ def project_to_response(project: Project) -> ProjectResponse:
 
 
 @router.get("", response_model=list[ProjectResponse])
-def list_projects(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    projects = db.query(Project).order_by(Project.name).all()
+def list_projects(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    server_ids = get_accessible_server_ids(db, user)
+    query = filter_projects_query(db.query(Project), server_ids)
+    projects = query.order_by(Project.name).all()
     return [project_to_response(p) for p in projects]
 
 
@@ -47,6 +55,12 @@ def create_project(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
 ):
+    validate_project_server_links(
+        db,
+        user,
+        payload.frontend_server_id,
+        payload.backend_server_id,
+    )
     project = Project(**payload.model_dump())
     db.add(project)
     db.commit()
@@ -59,11 +73,9 @@ def create_project(
 def get_project(
     project_id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project_or_403(db, user, project_id)
     return project_to_response(project)
 
 
@@ -74,10 +86,13 @@ def update_project(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
 ):
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    project = get_project_or_403(db, user, project_id)
+    data = payload.model_dump(exclude_unset=True)
+    frontend_id = data.get("frontend_server_id", project.frontend_server_id)
+    backend_id = data.get("backend_server_id", project.backend_server_id)
+    if "frontend_server_id" in data or "backend_server_id" in data:
+        validate_project_server_links(db, user, frontend_id, backend_id)
+    for key, value in data.items():
         setattr(project, key, value)
     db.commit()
     db.refresh(project)
@@ -91,9 +106,7 @@ def delete_project(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
 ):
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = get_project_or_403(db, user, project_id)
     log_audit(db, user, "delete", "project", str(project.id), project.name)
     db.delete(project)
     db.commit()

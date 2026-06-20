@@ -1,5 +1,3 @@
-import logging
-
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,9 +9,14 @@ from app.core.deps import get_current_user, require_roles
 from app.models import Server, ServerType, User, UserRole
 from app.schemas import ServerCreate, ServerResponse, ServerUpdate
 from app.services.audit import log_audit
+from app.services.permissions import (
+    filter_servers_query,
+    get_accessible_server_ids,
+    get_server_or_403,
+)
 from app.services.serializers import apply_server_credentials, server_to_response
 
-logger = logging.getLogger(__name__)
+logger = __import__("logging").getLogger(__name__)
 
 router = APIRouter(prefix="/servers", tags=["servers"])
 
@@ -75,7 +78,8 @@ def list_servers(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    query = db.query(Server)
+    server_ids = get_accessible_server_ids(db, user)
+    query = filter_servers_query(db.query(Server), server_ids)
     if server_type is not None:
         query = query.filter(Server.server_type == server_type)
     servers = query.order_by(Server.name).all()
@@ -86,7 +90,7 @@ def list_servers(
 def create_server(
     payload: ServerCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
+    user: User = Depends(require_roles(UserRole.admin)),
 ):
     data = _normalize_server_data(payload.model_dump(exclude={"username", "password", "ssh_key"}))
     server = Server(**data)
@@ -107,9 +111,7 @@ def get_server(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    server = db.query(Server).filter(Server.id == server_id).first()
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
+    server = get_server_or_403(db, user, server_id)
     return _build_response(server, user)
 
 
@@ -120,9 +122,7 @@ def update_server(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
 ):
-    server = db.query(Server).filter(Server.id == server_id).first()
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
+    server = get_server_or_403(db, user, server_id)
     data = _normalize_server_data(
         payload.model_dump(exclude_unset=True, exclude={"username", "password", "ssh_key"})
     )
@@ -158,7 +158,7 @@ def update_server(
 def delete_server(
     server_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
+    user: User = Depends(require_roles(UserRole.admin)),
 ):
     server = db.query(Server).filter(Server.id == server_id).first()
     if not server:

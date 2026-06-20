@@ -81,6 +81,14 @@ def run_migrations() -> None:
             updated_at TIMESTAMPTZ DEFAULT NOW()
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS user_server_access (
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            server_id UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (user_id, server_id)
+        )
+        """,
     ]
 
     # Enum values must be added before UPDATE statements that reference them.

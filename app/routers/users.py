@@ -9,6 +9,8 @@ from app.core.security import get_password_hash
 from app.models import User, UserRole
 from app.schemas import UserCreate, UserResponse, UserUpdate
 from app.services.audit import log_audit
+from app.services.permissions import sync_user_server_access
+from app.services.users import user_to_response
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -18,7 +20,8 @@ def list_users(
     db: Session = Depends(get_db),
     _: User = Depends(require_roles(UserRole.admin)),
 ):
-    return db.query(User).order_by(User.email).all()
+    users = db.query(User).order_by(User.email).all()
+    return [user_to_response(db, user) for user in users]
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -35,10 +38,12 @@ def create_user(
         password_hash=get_password_hash(payload.password),
     )
     db.add(user)
+    db.flush()
+    sync_user_server_access(db, user, payload.server_ids)
     db.commit()
     db.refresh(user)
     log_audit(db, admin, "create", "user", str(user.id), user.email)
-    return user
+    return user_to_response(db, user)
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
@@ -51,15 +56,19 @@ def update_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    data = payload.model_dump(exclude_unset=True, exclude={"password"})
+    data = payload.model_dump(exclude_unset=True, exclude={"password", "server_ids"})
     for key, value in data.items():
         setattr(user, key, value)
     if payload.password:
         user.password_hash = get_password_hash(payload.password)
+    if payload.server_ids is not None:
+        sync_user_server_access(db, user, payload.server_ids)
+    elif user.role == UserRole.admin:
+        sync_user_server_access(db, user, [])
     db.commit()
     db.refresh(user)
     log_audit(db, admin, "update", "user", str(user.id), user.email)
-    return user
+    return user_to_response(db, user)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

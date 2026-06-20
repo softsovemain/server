@@ -44,6 +44,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(min_length=6)
+    server_ids: list[UUID] = Field(default_factory=list)
 
 
 class UserUpdate(BaseModel):
@@ -51,6 +52,7 @@ class UserUpdate(BaseModel):
     role: UserRole | None = None
     password: str | None = Field(default=None, min_length=6)
     is_active: bool | None = None
+    server_ids: list[UUID] | None = None
 
 
 class UserResponse(UserBase):
@@ -59,6 +61,8 @@ class UserResponse(UserBase):
     id: UUID
     is_active: bool
     created_at: datetime
+    server_ids: list[UUID] = Field(default_factory=list)
+    has_full_access: bool = False
 
 
 class CategoryBase(BaseModel):

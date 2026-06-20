@@ -12,6 +12,7 @@ from app.core.security import (
 )
 from app.models import User
 from app.schemas import LoginRequest, PasswordChangeRequest, RefreshRequest, TokenResponse, UserResponse
+from app.services.users import user_to_response
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -49,8 +50,8 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse)
-def me(user: User = Depends(get_current_user)):
-    return user
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return user_to_response(db, user)
 
 
 @router.patch("/me/password")

@@ -21,7 +21,7 @@ def list_categories(db: Session = Depends(get_db), _: User = Depends(get_current
 def create_category(
     payload: CategoryCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
+    user: User = Depends(require_roles(UserRole.admin)),
 ):
     category = Category(**payload.model_dump())
     db.add(category)
@@ -48,7 +48,7 @@ def update_category(
     category_id: UUID,
     payload: CategoryUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
+    user: User = Depends(require_roles(UserRole.admin)),
 ):
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
@@ -65,7 +65,7 @@ def update_category(
 def delete_category(
     category_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
+    user: User = Depends(require_roles(UserRole.admin)),
 ):
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
