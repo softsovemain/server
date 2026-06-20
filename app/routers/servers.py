@@ -1,3 +1,5 @@
+import logging
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,6 +13,8 @@ from app.schemas import ServerCreate, ServerResponse, ServerUpdate
 from app.services.audit import log_audit
 from app.services.serializers import apply_server_credentials, server_to_response
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/servers", tags=["servers"])
 
 
@@ -22,6 +26,14 @@ def _normalize_server_data(data: dict) -> dict:
         else:
             normalized[key] = value
     return normalized
+
+
+def _build_response(server: Server, user: User) -> ServerResponse:
+    try:
+        return server_to_response(server, user)
+    except Exception as exc:
+        logger.exception("Failed to build server response")
+        raise HTTPException(status_code=500, detail=f"Server saved but response failed: {exc}") from exc
 
 
 def _save_server(
@@ -54,7 +66,7 @@ def _save_server(
         detail = str(getattr(exc, "orig", exc))
         raise HTTPException(status_code=400, detail=f"Could not save server: {detail}") from exc
     db.refresh(server)
-    return server_to_response(server, user)
+    return _build_response(server, user)
 
 
 @router.get("", response_model=list[ServerResponse])
@@ -67,7 +79,7 @@ def list_servers(
     if server_type is not None:
         query = query.filter(Server.server_type == server_type)
     servers = query.order_by(Server.name).all()
-    return [server_to_response(s, user) for s in servers]
+    return [_build_response(s, user) for s in servers]
 
 
 @router.post("", response_model=ServerResponse, status_code=status.HTTP_201_CREATED)
@@ -98,7 +110,7 @@ def get_server(
     server = db.query(Server).filter(Server.id == server_id).first()
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
-    return server_to_response(server, user)
+    return _build_response(server, user)
 
 
 @router.patch("/{server_id}", response_model=ServerResponse)
@@ -139,7 +151,7 @@ def update_server(
         detail = str(getattr(exc, "orig", exc))
         raise HTTPException(status_code=400, detail=f"Could not save server: {detail}") from exc
     db.refresh(server)
-    return server_to_response(server, user)
+    return _build_response(server, user)
 
 
 @router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
