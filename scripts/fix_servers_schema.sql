@@ -1,7 +1,7 @@
--- Run on production to fix server create errors:
+-- Run on production:
 -- PGPASSWORD='...' psql -h 127.0.0.1 -U server -d server -f scripts/fix_servers_schema.sql
 
--- 1) Inspect current schema (check output)
+-- 1) Inspect
 \d servers
 
 SELECT t.typname, e.enumlabel
@@ -20,7 +20,19 @@ ALTER TABLE servers ADD COLUMN IF NOT EXISTS ssh_key_encrypted TEXT;
 ALTER TABLE servers ADD COLUMN IF NOT EXISTS renewal_cost NUMERIC(10, 2);
 ALTER TABLE servers ADD COLUMN IF NOT EXISTS tags VARCHAR[];
 
--- 3) Migrate legacy plain-text credential columns if they exist
+-- 3) CRITICAL: add enum values OUTSIDE transactions (DO blocks fail on many PG versions)
+ALTER TYPE servertype ADD VALUE IF NOT EXISTS 'frontend';
+ALTER TYPE servertype ADD VALUE IF NOT EXISTS 'backend';
+ALTER TYPE servertype ADD VALUE IF NOT EXISTS 'other';
+
+-- 4) Verify enum values were added
+SELECT t.typname, e.enumlabel
+FROM pg_enum e
+JOIN pg_type t ON e.enumtypid = t.oid
+WHERE t.typname = 'servertype'
+ORDER BY e.enumsortorder;
+
+-- 5) Migrate legacy credential columns if they exist
 DO $$
 BEGIN
     IF EXISTS (
@@ -42,61 +54,7 @@ BEGIN
     END IF;
 END $$;
 
--- 4) Ensure server_type enum values exist (required for frontend/backend/other)
-DO $$
-DECLARE
-    val TEXT;
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'servertype') THEN
-        FOREACH val IN ARRAY ARRAY['frontend', 'backend', 'other'] LOOP
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_enum e
-                JOIN pg_type t ON e.enumtypid = t.oid
-                WHERE t.typname = 'servertype' AND e.enumlabel = val
-            ) THEN
-                EXECUTE format('ALTER TYPE servertype ADD VALUE %L', val);
-            END IF;
-        END LOOP;
-    END IF;
-END $$;
-
--- 5) Ensure provider enum has "other" (default on insert)
-DO $$
-DECLARE
-    val TEXT;
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'serverprovider') THEN
-        FOREACH val IN ARRAY ARRAY['vercel', 'hostinger', 'aws', 'digitalocean', 'cloudflare', 'vps', 'other'] LOOP
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_enum e
-                JOIN pg_type t ON e.enumtypid = t.oid
-                WHERE t.typname = 'serverprovider' AND e.enumlabel = val
-            ) THEN
-                EXECUTE format('ALTER TYPE serverprovider ADD VALUE %L', val);
-            END IF;
-        END LOOP;
-    END IF;
-END $$;
-
--- 6) Ensure status enum values exist
-DO $$
-DECLARE
-    val TEXT;
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'serverstatus') THEN
-        FOREACH val IN ARRAY ARRAY['active', 'expired', 'maintenance'] LOOP
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_enum e
-                JOIN pg_type t ON e.enumtypid = t.oid
-                WHERE t.typname = 'serverstatus' AND e.enumlabel = val
-            ) THEN
-                EXECUTE format('ALTER TYPE serverstatus ADD VALUE %L', val);
-            END IF;
-        END LOOP;
-    END IF;
-END $$;
-
--- 7) Map old server_type values to new ones
+-- 6) Map old server_type values to new ones (only after frontend/backend exist)
 UPDATE servers SET server_type = 'frontend'
 WHERE server_type::text IN ('hosting', 'cdn', 'email', 'domain_registrar');
 

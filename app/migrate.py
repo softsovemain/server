@@ -13,26 +13,17 @@ ENUM_VALUES: dict[str, list[str]] = {
 }
 
 
-def _add_enum_values(conn, type_name: str, values: list[str]) -> None:
-    for value in values:
-        conn.execute(
-            text(
-                f"""
-                DO $$
-                BEGIN
-                    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = '{type_name}') THEN
-                        IF NOT EXISTS (
-                            SELECT 1 FROM pg_enum e
-                            JOIN pg_type t ON e.enumtypid = t.oid
-                            WHERE t.typname = '{type_name}' AND e.enumlabel = '{value}'
-                        ) THEN
-                            ALTER TYPE {type_name} ADD VALUE '{value}';
-                        END IF;
-                    END IF;
-                END $$;
-                """
-            )
-        )
+def _add_enum_values(type_name: str, values: list[str]) -> None:
+    """ALTER TYPE ADD VALUE must run outside a transaction on PostgreSQL < 12."""
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        for value in values:
+            try:
+                conn.execute(
+                    text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS '{value}'")
+                )
+                logger.info("Ensured enum %s has value %s", type_name, value)
+            except Exception as exc:
+                logger.warning("Enum %s value %s: %s", type_name, value, exc)
 
 
 def run_migrations() -> None:
@@ -77,8 +68,6 @@ def run_migrations() -> None:
         FROM databases d
         WHERE projects.database_id = d.id AND projects.database_name IS NULL
         """,
-        "UPDATE servers SET server_type = 'frontend' WHERE server_type::text IN ('hosting', 'cdn', 'email', 'domain_registrar')",
-        "UPDATE servers SET server_type = 'backend' WHERE server_type::text = 'database'",
         "UPDATE projects SET domain_name = COALESCE(domain_name, frontend_url, main_url) WHERE domain_name IS NULL",
         "UPDATE projects SET frontend_server_id = server_id WHERE frontend_server_id IS NULL AND server_id IS NOT NULL",
         "UPDATE projects SET backend_api_url = backend_url WHERE backend_api_url IS NULL AND backend_url IS NOT NULL",
@@ -94,6 +83,10 @@ def run_migrations() -> None:
         """,
     ]
 
+    # Enum values must be added before UPDATE statements that reference them.
+    for type_name, values in ENUM_VALUES.items():
+        _add_enum_values(type_name, values)
+
     with engine.begin() as conn:
         for stmt in statements:
             try:
@@ -101,8 +94,12 @@ def run_migrations() -> None:
             except Exception as exc:
                 logger.warning("Migration skipped/failed: %s", exc)
 
-        for type_name, values in ENUM_VALUES.items():
+        # Run after enum values exist
+        for stmt in (
+            "UPDATE servers SET server_type = 'frontend' WHERE server_type::text IN ('hosting', 'cdn', 'email', 'domain_registrar')",
+            "UPDATE servers SET server_type = 'backend' WHERE server_type::text = 'database'",
+        ):
             try:
-                _add_enum_values(conn, type_name, values)
+                conn.execute(text(stmt))
             except Exception as exc:
-                logger.warning("Enum migration failed for %s: %s", type_name, exc)
+                logger.warning("Server type remap failed: %s", exc)
