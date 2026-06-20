@@ -1,7 +1,9 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.email import Email
 
 from app.models import (
     CategoryType,
@@ -22,7 +24,7 @@ class TokenResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: Email
     password: str
 
 
@@ -36,7 +38,7 @@ class PasswordChangeRequest(BaseModel):
 
 
 class UserBase(BaseModel):
-    email: EmailStr
+    email: Email
     role: UserRole = UserRole.viewer
 
 
@@ -45,7 +47,7 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    email: EmailStr | None = None
+    email: Email | None = None
     role: UserRole | None = None
     password: str | None = Field(default=None, min_length=6)
     is_active: bool | None = None
@@ -88,13 +90,12 @@ class CategoryResponse(CategoryBase):
 class ServerBase(BaseModel):
     name: str
     category_id: UUID | None = None
-    provider: ServerProvider = ServerProvider.other
-    server_type: ServerType = ServerType.hosting
+    server_type: ServerType = ServerType.frontend
+    server_os: str | None = None
+    server_ip: str | None = None
     panel_url: str | None = None
     expiry_date: date | None = None
-    renewal_cost: float | None = None
     notes: str | None = None
-    tags: list[str] = Field(default_factory=list)
     status: ServerStatus = ServerStatus.active
 
 
@@ -107,16 +108,15 @@ class ServerCreate(ServerBase):
 class ServerUpdate(BaseModel):
     name: str | None = None
     category_id: UUID | None = None
-    provider: ServerProvider | None = None
     server_type: ServerType | None = None
+    server_os: str | None = None
+    server_ip: str | None = None
     panel_url: str | None = None
     username: str | None = None
     password: str | None = None
     ssh_key: str | None = None
     expiry_date: date | None = None
-    renewal_cost: float | None = None
     notes: str | None = None
-    tags: list[str] | None = None
     status: ServerStatus | None = None
 
 
@@ -193,14 +193,14 @@ class DatabaseResponse(DatabaseBase):
 
 class ProjectBase(BaseModel):
     name: str
+    domain_name: str | None = None
     category_id: UUID | None = None
-    server_id: UUID | None = None
-    domain_id: UUID | None = None
+    frontend_server_id: UUID | None = None
+    backend_server_id: UUID | None = None
     database_id: UUID | None = None
     environment: ProjectEnvironment = ProjectEnvironment.production
-    main_url: str | None = None
     frontend_url: str | None = None
-    backend_url: str | None = None
+    backend_api_url: str | None = None
     tech_stack: list[str] = Field(default_factory=list)
     status: ProjectStatus = ProjectStatus.live
     notes: str | None = None
@@ -212,14 +212,14 @@ class ProjectCreate(ProjectBase):
 
 class ProjectUpdate(BaseModel):
     name: str | None = None
+    domain_name: str | None = None
     category_id: UUID | None = None
-    server_id: UUID | None = None
-    domain_id: UUID | None = None
+    frontend_server_id: UUID | None = None
+    backend_server_id: UUID | None = None
     database_id: UUID | None = None
     environment: ProjectEnvironment | None = None
-    main_url: str | None = None
     frontend_url: str | None = None
-    backend_url: str | None = None
+    backend_api_url: str | None = None
     tech_stack: list[str] | None = None
     status: ProjectStatus | None = None
     notes: str | None = None
@@ -232,8 +232,8 @@ class ProjectResponse(ProjectBase):
     created_at: datetime
     updated_at: datetime
     category_name: str | None = None
-    server_name: str | None = None
-    domain_name: str | None = None
+    frontend_server_name: str | None = None
+    backend_server_name: str | None = None
     database_name: str | None = None
 
 

@@ -1,11 +1,11 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_roles
-from app.models import Server, User, UserRole
+from app.models import Server, ServerType, User, UserRole
 from app.schemas import ServerCreate, ServerResponse, ServerUpdate
 from app.services.audit import log_audit
 from app.services.serializers import apply_server_credentials, server_to_response
@@ -14,8 +14,15 @@ router = APIRouter(prefix="/servers", tags=["servers"])
 
 
 @router.get("", response_model=list[ServerResponse])
-def list_servers(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    servers = db.query(Server).order_by(Server.name).all()
+def list_servers(
+    server_type: ServerType | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    query = db.query(Server)
+    if server_type is not None:
+        query = query.filter(Server.server_type == server_type)
+    servers = query.order_by(Server.name).all()
     return [server_to_response(s, user) for s in servers]
 
 

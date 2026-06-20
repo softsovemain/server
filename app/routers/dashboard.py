@@ -5,24 +5,23 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models import Category, Database, Domain, Project, Server, User
+from app.models import Category, Database, Project, Server, User
 from app.schemas import DashboardStats, ExpiringItem
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
-def _expiring_items(items: list, name_attr: str, type_label: str, today: date, horizon: date) -> list[ExpiringItem]:
+def _expiring_servers(servers: list[Server], today: date, horizon: date) -> list[ExpiringItem]:
     result = []
-    for item in items:
-        expiry = getattr(item, "expiry_date", None)
-        if expiry and today <= expiry <= horizon:
+    for server in servers:
+        if server.expiry_date and today <= server.expiry_date <= horizon:
             result.append(
                 ExpiringItem(
-                    id=item.id,
-                    name=getattr(item, name_attr),
-                    type=type_label,
-                    expiry_date=expiry,
-                    days_remaining=(expiry - today).days,
+                    id=server.id,
+                    name=server.name,
+                    type="server",
+                    expiry_date=server.expiry_date,
+                    days_remaining=(server.expiry_date - today).days,
                 )
             )
     return sorted(result, key=lambda x: x.days_remaining)
@@ -34,14 +33,19 @@ def get_stats(db: Session = Depends(get_db), _: User = Depends(get_current_user)
     horizon = today + timedelta(days=30)
 
     servers = db.query(Server).filter(Server.expiry_date.isnot(None)).all()
-    domains = db.query(Domain).filter(Domain.expiry_date.isnot(None)).all()
+    domain_count = (
+        db.query(Project.domain_name)
+        .filter(Project.domain_name.isnot(None), Project.domain_name != "")
+        .distinct()
+        .count()
+    )
 
     return DashboardStats(
         total_categories=db.query(Category).count(),
         total_servers=db.query(Server).count(),
         total_projects=db.query(Project).count(),
-        total_domains=db.query(Domain).count(),
+        total_domains=domain_count,
         total_databases=db.query(Database).count(),
-        expiring_servers=_expiring_items(servers, "name", "server", today, horizon),
-        expiring_domains=_expiring_items(domains, "domain_name", "domain", today, horizon),
+        expiring_servers=_expiring_servers(servers, today, horizon),
+        expiring_domains=[],
     )

@@ -32,11 +32,8 @@ class ServerProvider(str, enum.Enum):
 
 
 class ServerType(str, enum.Enum):
-    hosting = "hosting"
-    database = "database"
-    domain_registrar = "domain_registrar"
-    cdn = "cdn"
-    email = "email"
+    frontend = "frontend"
+    backend = "backend"
     other = "other"
 
 
@@ -108,7 +105,9 @@ class Server(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     provider: Mapped[ServerProvider] = mapped_column(Enum(ServerProvider), default=ServerProvider.other)
-    server_type: Mapped[ServerType] = mapped_column(Enum(ServerType), default=ServerType.hosting)
+    server_type: Mapped[ServerType] = mapped_column(Enum(ServerType), default=ServerType.frontend)
+    server_os: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    server_ip: Mapped[str | None] = mapped_column(String(100), nullable=True)
     panel_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     username_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -124,8 +123,15 @@ class Server(Base):
     )
 
     category: Mapped["Category | None"] = relationship(back_populates="servers")
-    projects: Mapped[list["Project"]] = relationship(back_populates="server")
     databases: Mapped[list["Database"]] = relationship(back_populates="server")
+    frontend_projects: Mapped[list["Project"]] = relationship(
+        back_populates="frontend_server",
+        foreign_keys="Project.frontend_server_id",
+    )
+    backend_projects: Mapped[list["Project"]] = relationship(
+        back_populates="backend_server",
+        foreign_keys="Project.backend_server_id",
+    )
 
 
 class Domain(Base):
@@ -142,8 +148,6 @@ class Domain(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-
-    projects: Mapped[list["Project"]] = relationship(back_populates="domain")
 
 
 class Database(Base):
@@ -173,22 +177,22 @@ class Project(Base):
     category_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL"), nullable=True
     )
-    server_id: Mapped[uuid.UUID | None] = mapped_column(
+    frontend_server_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("servers.id", ondelete="SET NULL"), nullable=True
     )
-    domain_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("domains.id", ondelete="SET NULL"), nullable=True
+    backend_server_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("servers.id", ondelete="SET NULL"), nullable=True
     )
     database_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("databases.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    domain_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     environment: Mapped[ProjectEnvironment] = mapped_column(
         Enum(ProjectEnvironment), default=ProjectEnvironment.production
     )
-    main_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     frontend_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    backend_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    backend_api_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     tech_stack: Mapped[list[str] | None] = mapped_column(ARRAY(String), default=list)
     status: Mapped[ProjectStatus] = mapped_column(Enum(ProjectStatus), default=ProjectStatus.live)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -198,8 +202,14 @@ class Project(Base):
     )
 
     category: Mapped["Category | None"] = relationship(back_populates="projects")
-    server: Mapped["Server | None"] = relationship(back_populates="projects")
-    domain: Mapped["Domain | None"] = relationship(back_populates="projects")
+    frontend_server: Mapped["Server | None"] = relationship(
+        back_populates="frontend_projects",
+        foreign_keys=[frontend_server_id],
+    )
+    backend_server: Mapped["Server | None"] = relationship(
+        back_populates="backend_projects",
+        foreign_keys=[backend_server_id],
+    )
     database: Mapped["Database | None"] = relationship(back_populates="projects")
 
 

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     CORS_ORIGINS: str = "http://localhost:3000"
-    ADMIN_EMAIL: str = "admin@opshub.local"
+    ADMIN_EMAIL: str = "admin@softsove.cloud"
     ADMIN_PASSWORD: str = "admin123"
 
     @property
