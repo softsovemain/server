@@ -194,10 +194,10 @@ class DatabaseResponse(DatabaseBase):
 class ProjectBase(BaseModel):
     name: str
     domain_name: str | None = None
+    database_name: str | None = None
     category_id: UUID | None = None
     frontend_server_id: UUID | None = None
     backend_server_id: UUID | None = None
-    database_id: UUID | None = None
     environment: ProjectEnvironment = ProjectEnvironment.production
     frontend_url: str | None = None
     backend_api_url: str | None = None
@@ -213,10 +213,10 @@ class ProjectCreate(ProjectBase):
 class ProjectUpdate(BaseModel):
     name: str | None = None
     domain_name: str | None = None
+    database_name: str | None = None
     category_id: UUID | None = None
     frontend_server_id: UUID | None = None
     backend_server_id: UUID | None = None
-    database_id: UUID | None = None
     environment: ProjectEnvironment | None = None
     frontend_url: str | None = None
     backend_api_url: str | None = None
@@ -234,7 +234,6 @@ class ProjectResponse(ProjectBase):
     category_name: str | None = None
     frontend_server_name: str | None = None
     backend_server_name: str | None = None
-    database_name: str | None = None
 
 
 class ExpiringItem(BaseModel):
@@ -272,3 +271,28 @@ class AuditLogResponse(BaseModel):
     entity_id: str | None
     details: str | None
     created_at: datetime
+
+
+class ProjectCommandBase(BaseModel):
+    project_id: UUID
+    label: str = Field(min_length=1, max_length=255)
+    command: str = Field(min_length=1)
+
+
+class ProjectCommandCreate(ProjectCommandBase):
+    pass
+
+
+class ProjectCommandUpdate(BaseModel):
+    project_id: UUID | None = None
+    label: str | None = Field(default=None, min_length=1, max_length=255)
+    command: str | None = Field(default=None, min_length=1)
+
+
+class ProjectCommandResponse(ProjectCommandBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+    project_name: str | None = None

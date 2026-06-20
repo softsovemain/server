@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routers import audit, auth, categories, dashboard, databases, domains, projects, search, servers, users
+from app.routers import audit, auth, categories, commands, dashboard, databases, domains, projects, search, servers, users
 from app.migrate import run_migrations
 from app.seed import run_seed
 
@@ -33,6 +33,7 @@ app.include_router(auth.router, prefix=api_prefix)
 app.include_router(categories.router, prefix=api_prefix)
 app.include_router(servers.router, prefix=api_prefix)
 app.include_router(projects.router, prefix=api_prefix)
+app.include_router(commands.router, prefix=api_prefix)
 app.include_router(domains.router, prefix=api_prefix)
 app.include_router(databases.router, prefix=api_prefix)
 app.include_router(users.router, prefix=api_prefix)

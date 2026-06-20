@@ -17,10 +17,10 @@ def project_to_response(project: Project) -> ProjectResponse:
         id=project.id,
         name=project.name,
         domain_name=project.domain_name,
+        database_name=project.database_name,
         category_id=project.category_id,
         frontend_server_id=project.frontend_server_id,
         backend_server_id=project.backend_server_id,
-        database_id=project.database_id,
         environment=project.environment,
         frontend_url=project.frontend_url,
         backend_api_url=project.backend_api_url,
@@ -32,7 +32,6 @@ def project_to_response(project: Project) -> ProjectResponse:
         category_name=project.category.name if project.category else None,
         frontend_server_name=project.frontend_server.name if project.frontend_server else None,
         backend_server_name=project.backend_server.name if project.backend_server else None,
-        database_name=project.database.name if project.database else None,
     )
 
 

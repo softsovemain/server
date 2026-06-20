@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models import Category, Database, Project, Server, User
+from app.models import Category, Project, Server, User
 from app.schemas import DashboardStats, ExpiringItem
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -40,12 +40,19 @@ def get_stats(db: Session = Depends(get_db), _: User = Depends(get_current_user)
         .count()
     )
 
+    database_count = (
+        db.query(Project.database_name)
+        .filter(Project.database_name.isnot(None), Project.database_name != "")
+        .distinct()
+        .count()
+    )
+
     return DashboardStats(
         total_categories=db.query(Category).count(),
         total_servers=db.query(Server).count(),
         total_projects=db.query(Project).count(),
         total_domains=domain_count,
-        total_databases=db.query(Database).count(),
+        total_databases=database_count,
         expiring_servers=_expiring_servers(servers, today, horizon),
         expiring_domains=[],
     )

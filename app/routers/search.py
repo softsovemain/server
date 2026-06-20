@@ -23,7 +23,12 @@ def search(
         results.append(SearchResult(id=server.id, name=server.name, type="server", subtitle=server.server_type.value))
 
     for project in db.query(Project).filter(
-        or_(Project.name.ilike(term), Project.notes.ilike(term), Project.domain_name.ilike(term))
+        or_(
+            Project.name.ilike(term),
+            Project.notes.ilike(term),
+            Project.domain_name.ilike(term),
+            Project.database_name.ilike(term),
+        )
     ).limit(10):
         results.append(
             SearchResult(
