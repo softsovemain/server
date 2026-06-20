@@ -13,7 +13,6 @@ def server_to_response(server: Server, user: User) -> ServerResponse:
         id=server.id,
         name=server.name,
         category_id=server.category_id,
-        provider=server.provider,
         server_type=server.server_type,
         server_os=server.server_os,
         server_ip=server.server_ip,

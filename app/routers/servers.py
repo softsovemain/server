@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -11,6 +12,49 @@ from app.services.audit import log_audit
 from app.services.serializers import apply_server_credentials, server_to_response
 
 router = APIRouter(prefix="/servers", tags=["servers"])
+
+
+def _normalize_server_data(data: dict) -> dict:
+    normalized = {}
+    for key, value in data.items():
+        if value == "":
+            normalized[key] = None
+        else:
+            normalized[key] = value
+    return normalized
+
+
+def _save_server(
+    db: Session,
+    user: User,
+    server: Server,
+    *,
+    username: str | None,
+    password: str | None,
+    ssh_key: str | None,
+    audit_action: str,
+) -> ServerResponse:
+    try:
+        apply_server_credentials(
+            server,
+            username if username != "" else None,
+            password if password != "" else None,
+            ssh_key if ssh_key != "" else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    db.add(server)
+    db.flush()
+    log_audit(db, user, audit_action, "server", str(server.id), server.name)
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        detail = str(getattr(exc, "orig", exc))
+        raise HTTPException(status_code=400, detail=f"Could not save server: {detail}") from exc
+    db.refresh(server)
+    return server_to_response(server, user)
 
 
 @router.get("", response_model=list[ServerResponse])
@@ -32,14 +76,17 @@ def create_server(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
 ):
-    data = payload.model_dump(exclude={"username", "password", "ssh_key"})
+    data = _normalize_server_data(payload.model_dump(exclude={"username", "password", "ssh_key"}))
     server = Server(**data)
-    apply_server_credentials(server, payload.username, payload.password, payload.ssh_key)
-    db.add(server)
-    db.commit()
-    db.refresh(server)
-    log_audit(db, user, "create", "server", str(server.id), server.name)
-    return server_to_response(server, user)
+    return _save_server(
+        db,
+        user,
+        server,
+        username=payload.username,
+        password=payload.password,
+        ssh_key=payload.ssh_key,
+        audit_action="create",
+    )
 
 
 @router.get("/{server_id}", response_model=ServerResponse)
@@ -64,14 +111,34 @@ def update_server(
     server = db.query(Server).filter(Server.id == server_id).first()
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
-    data = payload.model_dump(exclude_unset=True, exclude={"username", "password", "ssh_key"})
+    data = _normalize_server_data(
+        payload.model_dump(exclude_unset=True, exclude={"username", "password", "ssh_key"})
+    )
     for key, value in data.items():
         setattr(server, key, value)
-    if payload.username is not None or payload.password is not None or payload.ssh_key is not None:
-        apply_server_credentials(server, payload.username, payload.password, payload.ssh_key)
-    db.commit()
-    db.refresh(server)
+
+    username = payload.username if payload.username is not None else None
+    password = payload.password if payload.password is not None else None
+    ssh_key = payload.ssh_key if payload.ssh_key is not None else None
+    if username is not None or password is not None or ssh_key is not None:
+        return _save_server(
+            db,
+            user,
+            server,
+            username=username,
+            password=password,
+            ssh_key=ssh_key,
+            audit_action="update",
+        )
+
     log_audit(db, user, "update", "server", str(server.id), server.name)
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        detail = str(getattr(exc, "orig", exc))
+        raise HTTPException(status_code=400, detail=f"Could not save server: {detail}") from exc
+    db.refresh(server)
     return server_to_response(server, user)
 
 
@@ -86,4 +153,9 @@ def delete_server(
         raise HTTPException(status_code=404, detail="Server not found")
     log_audit(db, user, "delete", "server", str(server.id), server.name)
     db.delete(server)
-    db.commit()
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        detail = str(getattr(exc, "orig", exc))
+        raise HTTPException(status_code=400, detail=f"Could not delete server: {detail}") from exc

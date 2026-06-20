@@ -7,6 +7,12 @@ def run_migrations() -> None:
     statements = [
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS server_os VARCHAR(255)",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS server_ip VARCHAR(100)",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS panel_url VARCHAR(500)",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS username_encrypted TEXT",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS password_encrypted TEXT",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS ssh_key_encrypted TEXT",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS renewal_cost NUMERIC(10, 2)",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS tags VARCHAR[]",
         "ALTER TABLE projects ADD COLUMN IF NOT EXISTS domain_name VARCHAR(255)",
         "ALTER TABLE projects ADD COLUMN IF NOT EXISTS frontend_server_id UUID REFERENCES servers(id) ON DELETE SET NULL",
         "ALTER TABLE projects ADD COLUMN IF NOT EXISTS backend_server_id UUID REFERENCES servers(id) ON DELETE SET NULL",
