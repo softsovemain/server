@@ -104,7 +104,7 @@ def update_project(
 def delete_project(
     project_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
+    user: User = Depends(require_roles(UserRole.admin)),
 ):
     project = get_project_or_403(db, user, project_id)
     log_audit(db, user, "delete", "project", str(project.id), project.name)

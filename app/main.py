@@ -23,7 +23,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="OpsHub API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="SOFTSOVE Cloud Platforms API", version="1.0.0", lifespan=lifespan)
 register_exception_handlers(app)
 
 app.add_middleware(

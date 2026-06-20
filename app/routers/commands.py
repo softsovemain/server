@@ -107,7 +107,7 @@ def update_command(
 def delete_command(
     command_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.admin, UserRole.devops)),
+    user: User = Depends(require_roles(UserRole.admin)),
 ):
     cmd = _get_command_or_403(db, user, command_id)
     log_audit(db, user, "delete", "command", str(cmd.id), cmd.label)
